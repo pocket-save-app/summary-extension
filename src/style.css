@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+	margin: 0;
+	min-width: 320px;
+	cursor: default;
+
+	background-image: linear-gradient(225deg, #e9defa 0%, #fbfcdb 100%);
+}
+
+#app {
+	width: 650px;
+	margin: 0 auto;
+	padding: 0;
+}
+
+.app-screen {
+	min-height: 200px;
+}
