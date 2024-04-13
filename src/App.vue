@@ -28,7 +28,7 @@ export default {
 				site_name: null,
 				locale: null,
 				byline: null,
-				description: '', // rename to excerpt
+				excerpt: '',
 				image: null,
 				icon: null,
 				content: '',
@@ -87,69 +87,72 @@ export default {
 			this.page.title = tab.title
 			this.page.icon = tab.favIconUrl
 
-			const isYoutube = false
-			const isFileUrl = false
-
 			function extractPageContent() {
-				console.log('Summarize', window.location.hostname, document.body)
+				console.log('Summarize', window.location.hostname, document.contentType, document.title)
+
 				return {
+					contentType: document.contentType,
+					document: new XMLSerializer().serializeToString(document),
 					page: {
 						url: document.querySelector('link[rel="canonical"]')?.getAttribute('href'),
 						type: document.querySelector('meta[property="og:type"]')?.getAttribute('content'),
 						title: document.querySelector('meta[property="og:title"]')?.getAttribute('content') || document.title,
 						site_name: document.querySelector('meta[property="og:site_name"]')?.getAttribute('content'),
 						locale: document.querySelector('meta[property="og:locale"]')?.getAttribute('content'),
-						description: document.querySelector('meta[property="og:description"]')?.getAttribute('content') || document.querySelector('meta[name="description"]')?.getAttribute('content'),
+						excerpt: document.querySelector('meta[property="og:description"]')?.getAttribute('content') || document.querySelector('meta[name="description"]')?.getAttribute('content'),
 						image: document.querySelector('meta[property="og:image"]')?.getAttribute('content'),
 					},
-					document: new XMLSerializer().serializeToString(document),
 				}
 			}
 
 			const setContent = (replies: any[]) => {
 				const data = replies[0].result
 
-				// set found page data
-				this.page = { ...this.page, ...data.page }
+				if (data.contentType === 'application/pdf' || data.contentType.startsWith('image/') || data.contentType.startsWith('video/')) {
+					setTimeout(() => {
+						this.saveUrl()
+					}, 3000)
+				} else if (data.contentType === 'text/html') {
+					// set found page data
+					this.page = { ...this.page, ...data.page }
 
-				// extract content with Readability
-				const doc = new DOMParser().parseFromString(data.document, "text/html");
-				const article = new Readability(doc).parse();
+					// extract content with Readability
+					const doc = new DOMParser().parseFromString(data.document, "text/html");
+					const article = new Readability(doc).parse();
 
-				if (article?.content) {
-					this.page.content = String(article.content).trim()
-					this.page.type ||= 'article'
+					if (article?.content) {
+						this.page.content = String(article.content).trim()
+						this.page.type ||= 'article'
 
-					if (!this.page.description && article.excerpt) {
-						this.page.description = article.excerpt
+						if (!this.page.excerpt && article.excerpt) {
+							this.page.excerpt = article.excerpt
+						}
+
+						if (!this.page.locale && article.lang) {
+							this.page.locale = article.lang
+						}
+
+						if (!this.page.site_name && article.siteName) {
+							this.page.site_name = article.siteName
+						}
+
+						if (article.byline) {
+							this.page.byline = article.byline.trim()
+						}
 					}
 
-					if (!this.page.locale && article.lang) {
-						this.page.locale = article.lang
-					}
-
-					if (!this.page.site_name && article.siteName) {
-						this.page.site_name = article.siteName
-					}
-
-					if (article.byline) {
-						this.page.byline = article.byline.trim()
-					}
+					this.saveWebpage()
+				} else {
+					this.status = 'error'
+					this.summary_status = 'error'
+					this.error = `Unsupported content type "${data.contentType}"`
 				}
-
-				this.saveWebpage()
 			}
 
-			if (isYoutube) {
-				// save youtube video data
-			} else if (isFileUrl) {
-				// extract doc data
-			} else {
-				chrome.scripting.executeScript({
-					target: { tabId: tab.id },
-					func: extractPageContent,
-				}, setContent);
-			}
+			chrome.scripting.executeScript({
+				target: { tabId: tab.id },
+				func: extractPageContent,
+			}, setContent);
 		},
 
 		setView(view: string) {
@@ -189,6 +192,43 @@ export default {
 			}).catch(error => {
 				this.status = 'error'
 				console.error('save-webpage error', error)
+			})
+		},
+		saveUrl() {
+			this.status = 'saving'
+
+			fetch(`${this.apiHost}/pockets/${this.distinct_id}/save-url`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify(this.page),
+			}).then(response => {
+				console.log('save-url response', response.ok, response.status, response.statusText)
+
+				if (response.ok) {
+					return response.json()
+				} else {
+					throw new Error(response.statusText)
+				}
+			}).then(item => {
+				console.log('save-url item', item)
+				this.page.id = item.id
+				this.page.content_status = item.content_status
+				this.status = 'saved'
+
+				if (item.content_status === 'ready') {
+					this.summary_status = 'summarizing'
+					this.summarize()
+					this.loadSimilar()
+				} else {
+					this.summary_status = 'no-content'
+				}
+			}).catch(error => {
+				this.status = 'error'
+				this.summary_status = 'error'
+				this.error = error.message
+				console.error('save-url error', error)
 			})
 		},
 
@@ -331,9 +371,9 @@ export default {
 						AI Model:
 						<select v-model="aiOptions.model" class="w-full rounded bg-slate-200/50 border-0 p-1 text-slate-900">
 							<option value="anthropic-claude-3-sonnet-20240229">Claude 3</option>
-							<!-- <option value="google-text-bison" disabled>Google PaLM 2</option> -->
-							<option value="@cf/meta/llama-2-7b-chat-int8">Llama 2 7B</option>
+							<option value="google-gemini-pro">Gemini 1 Pro</option>
 							<option value="openai-gpt-3.5-turbo">GPT 3.5 Turbo</option>
+							<option value="@cf/meta/llama-2-7b-chat-int8">Llama 2 7B</option>
 						</select>
 					</label>
 
@@ -350,11 +390,17 @@ export default {
 						Language:
 						<select v-model="aiOptions.language" class="w-full rounded bg-slate-200/50 border-0 p-1 text-slate-900">
 							<option value="">No change</option>
+							<hr>
 							<option value="arabic">Arabic</option>
 							<option value="english">English</option>
 							<option value="french">French</option>
 							<option value="japanese">Japanese</option>
+							<option value="russian">Russian</option>
 							<option value="spanish">Spanish</option>
+							<hr>
+							<option value="got-dothraki">Dothraki</option>
+							<option value="lotr-elvish">Elvish</option>
+							<option value="klingon">Klingon</option>
 						</select>
 					</label>
 				</div>
@@ -371,7 +417,7 @@ export default {
 				<div v-else-if="summary_status === 'ready'">
 					<div class="page-summary" v-html="page.summary"></div>
 				</div>
-				<div v-else class="text-center text-red-700">
+				<div v-else class="text-center text-red-700 text-lg">
 					Error summarizing this page ({{ error }})
 				</div>
 			</template>
@@ -391,7 +437,7 @@ export default {
 
 						<h3 class="mt-2 mb-2 px-3" :class="item.title.length > 50 ? 'font-bold' : 'font-medium text-lg'">{{ item.title }}</h3>
 
-						<p class="mb-2 px-3">{{ item.description }}</p>
+						<p class="mb-2 px-3">{{ item.excerpt }}</p>
 
 						<p class="px-3 text-neutral-600 mb-3">
 							<img v-if="item.icon" :src="item.icon" class="inline w-4 h-4 object-cover" :alt="item.site_name || item.title">
