@@ -44,7 +44,7 @@ export default {
 			},
 
 			// similar data
-			similar_status: 'loading',
+			similar_status: 'idle',
 			similar: [],
 
 			error: '',
@@ -108,9 +108,7 @@ export default {
 				const data = replies[0].result
 
 				if (data.contentType === 'application/pdf' || data.contentType.startsWith('image/') || data.contentType.startsWith('video/')) {
-					setTimeout(() => {
-						this.saveUrl()
-					}, 3000)
+					this.saveUrl()
 				} else if (data.contentType === 'text/html') {
 					// set found page data
 					this.page = { ...this.page, ...data.page }
@@ -213,15 +211,15 @@ export default {
 			}).then(item => {
 				console.log('save-url item', item)
 				this.page.id = item.id
+				this.page.type = item.type
 				this.page.content_status = item.content_status
 				this.status = 'saved'
 
+				this.summary_status = 'summarizing'
+				this.summarize()
+
 				if (item.content_status === 'ready') {
-					this.summary_status = 'summarizing'
-					this.summarize()
 					this.loadSimilar()
-				} else {
-					this.summary_status = 'no-content'
 				}
 			}).catch(error => {
 				this.status = 'error'
@@ -232,8 +230,6 @@ export default {
 		},
 
 		summarize() {
-			console.log('Start summarize', this.page.content.length)
-
 			if (this.status === 'saving') {
 				return
 			}
@@ -274,6 +270,10 @@ export default {
 				const converter = new Converter()
 				this.page.summary = converter.makeHtml(data.trim())
 				this.summary_status = 'ready'
+
+				if (this.similar_status === 'idle') {
+					this.loadSimilar()
+				}
 			}).catch(error => {
 				if (error.name !== 'AbortError') {
 					console.error('summarize error', error)
@@ -285,6 +285,7 @@ export default {
 			})
 		},
 		loadSimilar() {
+			console.log(this.page.id, 'Load similar')
 			this.similar_status = 'loading'
 
 			fetch(`${this.apiHost}/pockets/${this.distinct_id}/items/${this.page.id}/similar`).then(response => {
@@ -349,12 +350,11 @@ export default {
 				Summary
 			</div>
 			<div class="flex-1 py-3 cursor-pointer" :class="view === 'similar' ? 'font-bold bg-slate-50/70 backdrop-opacity-30' : 'hover:bg-slate-100 font-medium'" @click="setView('similar')">
-				Similar <span class="bg-indigo-100 dark:bg-indigo-900 p-1 ml-1 rounded" :class="similar.length ? 'text-indigo-900 dark:text-indigo-100' : 'text-neutral-700 dark:text-neutral-300'">{{ similar.length }}</span>
+				Similar <span v-if="Array.isArray(similar) && similar.length" class="bg-indigo-100 dark:bg-indigo-900 p-1 ml-1 rounded" :class="similar.length ? 'text-indigo-900 dark:text-indigo-100' : 'text-neutral-700 dark:text-neutral-300'">{{ similar.length }}</span>
 			</div>
 		</div>
 
 		<div class="p-3 pb-4 bg-slate-50/70 backdrop-opacity-30">
-
 			<template v-if="view === 'summary'">
 				<div class="grid grid-cols-3 gap-3 mb-4">
 					<label class="text-slate-600 text-center">
@@ -422,15 +422,16 @@ export default {
 					Error loading similar items ({{ error }})
 				</div>
 				<div v-else-if="!similar.length" class="text-center text-blue-800 py-4">
-					Save more pages, so we can start showing you similar ones.
+					Save more articles, videos or images, so we can start showing you similar ones.
 				</div>
 				<div v-else-if="similar.length" class="grid grid-cols-3 gap-3">
 					<a v-for="item in similar" :key="item.id" :href="item.url" target="_blank" class="bg-white hover:bg-slate-50 rounded" :class="{'row-span-2': item.image}">
-						<img v-if="item.image" :src="item.image" class="w-full h-24 object-cover rounded-t" :alt="item.title">
+						<img v-if="item.source === 'url' && item.image" :src="item.image" class="w-full h-24 object-cover rounded-t" :alt="item.title">
+						<img v-else-if="['file', 'url-file'].includes(item.source) && item.type.startsWith('image/')" :src="`https://pocket.layered.workers.dev/items/${item.id}/file`" class="w-full h-24 object-cover rounded-t" :alt="item.title">
 
 						<h3 class="mt-2 mb-2 px-3" :class="item.title.length > 50 ? 'font-bold' : 'font-medium text-lg'">{{ item.title }}</h3>
 
-						<p class="mb-2 px-3">{{ item.excerpt }}</p>
+						<p v-if="item.excerpt" class="mb-2 px-3">{{ item.excerpt }}</p>
 
 						<p class="px-3 text-neutral-600 mb-3">
 							<img v-if="item.icon" :src="item.icon" class="inline w-4 h-4 object-cover" :alt="item.site_name || item.title">
