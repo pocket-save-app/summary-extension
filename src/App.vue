@@ -1,6 +1,5 @@
 <script lang="ts">
 import { Converter } from 'showdown'
-import { encode, decode } from 'gpt-tokenizer'
 import { Readability } from '@mozilla/readability'
 
 import Loader from './components/Loader.vue'
@@ -239,14 +238,14 @@ export default {
 				return
 			}
 
-			if (this.page.content.length < 200) {
+			if (this.page.content === 'ready' && this.page.content.length < 200) {
 				this.summary_status = 'no-content'
 				return
 			}
 
-			this.summary_status = 'summarizing'
+			console.log(this.page.id, 'Load summary')
 
-			console.log('Summarize', this.page)
+			this.summary_status = 'summarizing'
 
 			if (this.reqController) {
 				this.reqController.abort()
@@ -255,15 +254,6 @@ export default {
 			this.reqController = new AbortController();
 
 			let model = this.aiOptions.model
-			let content = this.page.content
-
-			if (this.aiOptions.model.startsWith('openai-')) {
-				const contentTokens = encode(content)
-
-				if (contentTokens.length > 15000) {
-					content = decode(contentTokens.slice(0, 15000))
-				}
-			}
 
 			fetch(`${this.apiHost}/items/${this.page.id}/summary?model=${model}&template=${this.aiOptions.promptTemplate}&language=${this.aiOptions.language}`, {
 				signal: this.reqController.signal,
@@ -370,10 +360,13 @@ export default {
 					<label class="text-slate-600 text-center">
 						AI Model:
 						<select v-model="aiOptions.model" class="w-full rounded bg-slate-200/50 border-0 p-1 text-slate-900">
-							<option value="anthropic-claude-3-sonnet-20240229">Claude 3</option>
+							<option value="anthropic-claude-3-haiku-20240307">Claude 3 Haiku</option>
+							<option value="anthropic-claude-3-sonnet-20240229">Claude 3 Sonnet</option>
 							<option value="google-gemini-pro">Gemini 1 Pro</option>
 							<option value="openai-gpt-3.5-turbo">GPT 3.5 Turbo</option>
+							<option value="openai-gpt-4-turbo">GPT 4 Turbo</option>
 							<option value="@cf/meta/llama-2-7b-chat-int8">Llama 2 7B</option>
+							<option value="@cf/meta/llama-3-8b-instruct">Llama 3 7B</option>
 						</select>
 					</label>
 
