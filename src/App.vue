@@ -1,6 +1,7 @@
 <script lang="ts">
 import { Converter } from 'showdown'
 import { Readability } from '@mozilla/readability'
+import { urlIsYoutube } from '@layered/superurl'
 
 import Loader from './components/Loader.vue'
 
@@ -113,28 +114,32 @@ export default {
 					// set found page data
 					this.page = { ...this.page, ...data.page }
 
-					// extract content with Readability
-					const doc = new DOMParser().parseFromString(data.document, "text/html");
-					const article = new Readability(doc).parse();
+					const isYoutubeVideo = urlIsYoutube(this.page.url)
 
-					if (article?.content) {
-						this.page.content = String(article.content).trim()
-						this.page.type ||= 'article'
+					if (!isYoutubeVideo) {
+						// extract content with Readability
+						const doc = new DOMParser().parseFromString(data.document, "text/html");
+						const article = new Readability(doc).parse();
 
-						if (!this.page.excerpt && article.excerpt) {
-							this.page.excerpt = article.excerpt
-						}
+						if (article?.content) {
+							this.page.content = String(article.content).trim()
+							this.page.type ||= 'article'
 
-						if (!this.page.locale && article.lang) {
-							this.page.locale = article.lang
-						}
+							if (!this.page.excerpt && article.excerpt) {
+								this.page.excerpt = article.excerpt
+							}
 
-						if (!this.page.site_name && article.siteName) {
-							this.page.site_name = article.siteName
-						}
+							if (!this.page.locale && article.lang) {
+								this.page.locale = article.lang
+							}
 
-						if (article.byline) {
-							this.page.byline = article.byline.trim()
+							if (!this.page.site_name && article.siteName) {
+								this.page.site_name = article.siteName
+							}
+
+							if (article.byline) {
+								this.page.byline = article.byline.trim()
+							}
 						}
 					}
 
@@ -183,6 +188,9 @@ export default {
 					this.summary_status = 'summarizing'
 					this.summarize()
 					this.loadSimilar()
+				} else if (item.content_status === 'missing' && urlIsYoutube(this.page.url)) {
+					this.summary_status = 'summarizing'
+					this.summarize()
 				} else {
 					this.summary_status = 'no-content'
 				}
