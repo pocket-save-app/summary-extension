@@ -1,9 +1,58 @@
 <script lang="ts">
-import { Converter } from 'showdown'
-import { Readability } from '@mozilla/readability'
 import { urlIsYoutube } from '@layered/superurl'
+import { Readability } from '@mozilla/readability'
+import { isPlainObject } from 'lodash-es'
+import { Converter } from 'showdown'
 
 import Loader from './components/Loader.vue'
+
+class HttpError extends Error {
+	response: Response
+
+	constructor(response: Response) {
+		super(`HTTP Error ${response.status} ${response.statusText}`)
+		this.response = response
+	}
+}
+
+interface ResponseWithData extends Response {
+	data?: any
+}
+
+async function apiFetch(path: string, options: RequestInit): Promise<ResponseWithData> {
+	const url = new URL(path, 'https://pocket-api.unallow.com')
+
+	options.headers = new Headers({
+		'authorization': 'c3843947-b32d-46a1-8605-b7536ee4d58f',
+		...(options.headers || {}),
+	})
+
+	// helper: change method to POST if body is present
+	if (options.body) {
+		options.method ||= 'POST'
+
+		// check if body can be stringified
+		console.log('body type', options.body.constructor.name)
+		if (Array.isArray(options.body) || isPlainObject(options.body)) {
+			options.body = JSON.stringify(options.body)
+
+			if (!options.headers.has('content-type')) {
+				options.headers.set('content-type', 'application/json')
+			}
+		}
+	}
+
+	const response: ResponseWithData = await fetch(url, options)
+
+	// prepare Response data
+	response.data = response.headers.get('content-type')?.startsWith('application/json') ? await response.json() : await response.text()
+
+	if (!response.ok) {
+		throw new HttpError(response)
+	}
+
+	return response
+}
 
 export default {
 	name: 'PageSummary',
@@ -12,9 +61,10 @@ export default {
 		return {
 			id: chrome.runtime.id,
 			//apiHost: 'http://localhost:8787',
-			apiHost: 'https://pocket.layered.workers.dev',
+			apiHost: 'https://pocket-api.unallow.com',
 			distinct_id: crypto.randomUUID(),
 			reqController: null,
+			converter: new Converter(),
 
 			view: 'summary',
 
@@ -47,6 +97,11 @@ export default {
 			// similar data
 			similar_status: 'idle',
 			similar: [],
+
+			// ask ai
+			messages: [],
+			askStatus: 'idle',
+			newMessage: '',
 
 			error: '',
 		}
@@ -237,6 +292,61 @@ export default {
 			})
 		},
 
+		copyText(event: MouseEvent, text: string) {
+			navigator.clipboard.writeText(text)
+
+			const target = event.target as HTMLElement
+			const originalText = target.textContent
+			target.textContent = 'Copied!'
+
+			setTimeout(() => {
+				target.textContent = originalText
+			}, 1500)
+		},
+
+		askAiSummarize() {
+			let msg = `Summarize as ${this.aiOptions.promptTemplate}`
+			if (this.aiOptions.language) {
+				msg += ` in ${this.aiOptions.language}`
+			}
+			this.askAi(msg)
+		},
+		askAi(msg: string = null) {
+			this.askStatus = 'loading'
+			const $messages = document.getElementById('ask-messages')
+
+			this.messages.push({
+				role: 'user',
+				content: msg || this.newMessage,
+			})
+
+			this.newMessage = ''
+
+			setTimeout(() => {
+				$messages.scrollTop = $messages.scrollHeight
+			}, 100)
+
+			apiFetch(`pockets/${this.distinct_id}/items/${this.page.id}/messages`, {
+				body: this.messages,
+			}).then(({ data: message }) => {
+				console.log('message', message)
+
+				this.messages.push({
+					role: 'assistant',
+					content: message.trim(),
+				})
+
+				this.askStatus = 'idle'
+
+				setTimeout(() => {
+					$messages.scrollTop = $messages.scrollHeight
+				}, 100)
+			}).catch(error => {
+				this.askStatus = 'error'
+				console.warn('messages error', error)
+			})
+		},
+
 		summarize() {
 			if (this.status === 'saving') {
 				return
@@ -275,8 +385,7 @@ export default {
 					throw new Error(response.statusText)
 				}
 			}).then(data => {
-				const converter = new Converter()
-				this.page.summary = converter.makeHtml(data.trim())
+				this.page.summary = this.converter.makeHtml(data.trim())
 				this.summary_status = 'ready'
 
 				if (this.similar_status === 'idle') {
@@ -357,6 +466,9 @@ export default {
 			<div class="flex-1 py-3 cursor-pointer" :class="view === 'summary' ? 'font-bold bg-slate-50/70 backdrop-opacity-30' : 'hover:bg-slate-100 font-medium'" @click="setView('summary')">
 				Summary
 			</div>
+			<div class="flex-1 py-3 cursor-pointer" :class="view === 'ask' ? 'font-bold bg-slate-50/70 backdrop-opacity-30' : 'hover:bg-slate-100 font-medium'" @click="setView('ask')">
+				Ask
+			</div>
 			<div class="flex-1 py-3 cursor-pointer" :class="view === 'similar' ? 'font-bold bg-slate-50/70 backdrop-opacity-30' : 'hover:bg-slate-100 font-medium'" @click="setView('similar')">
 				Similar <span v-if="Array.isArray(similar) && similar.length" class="bg-indigo-100 dark:bg-indigo-900 p-1 ml-1 rounded" :class="similar.length ? 'text-indigo-900 dark:text-indigo-100' : 'text-neutral-700 dark:text-neutral-300'">{{ similar.length }}</span>
 			</div>
@@ -374,7 +486,7 @@ export default {
 							<option value="openai-gpt-3.5-turbo">GPT 3.5 Turbo</option>
 							<option value="openai-gpt-4-turbo">GPT 4 Turbo</option>
 							<option value="@cf/meta/llama-2-7b-chat-int8">Llama 2 7B</option>
-							<option value="@cf/meta/llama-3-8b-instruct">Llama 3 7B</option>
+							<option value="@cf/meta/llama-3-8b-instruct">Llama 3 8B</option>
 						</select>
 					</label>
 
@@ -421,6 +533,59 @@ export default {
 				<div v-else class="text-center text-red-700 text-lg">
 					Error summarizing this page ({{ error }})
 				</div>
+			</template>
+			<template v-else-if="view === 'ask'">
+				<div v-if="messages.length" id="ask-messages" class="overflow-y-auto h-72">
+					<div v-for="message in messages">
+						<p v-if="message.role === 'user'" class="text-stone-800 text-lg mb-1">{{ message.content }}</p>
+						<div v-else class="text-slate-800 mb-3">
+							<div v-html="converter.makeHtml(message.content)" class="mb-1"></div>
+							<p class="text-neutral-500">
+								<small class="text-slate-600 hover:text-slate-800">Read Aloud</small>
+								&middot;
+								<small class="text-slate-600 hover:text-slate-800 cursor-pointer" @click="$event => copyText($event, message.content)">Copy</small>
+							</p>
+						</div>
+					</div>
+
+					<Loader v-if="askStatus === 'loading'" :text="''"></Loader>
+				</div>
+				<!-- <div v-else class="h-24 mt-28 mb-20 bg-white/80 border border-dashed border-white/50 rounded"> -->
+				<div v-else class="flex items-center gap-3 h-72">
+					<!-- <p class="text-slate-800 p-4">Ask anything about this website</p> -->
+
+					<form @submit.prevent="askAiSummarize" class="inline-block rounded-full p-2 pl-3 bg-amber-50 border border-dashed border-amber-300/60 text-orange-900 text-md">
+						Summarize as <select v-model="aiOptions.promptTemplate" class="rounded bg-orange-200/20 border-0 text-orange-800">
+							<option value="short-paragraph">short paragraph</option>
+							<option value="medium-paragraph">medium paragraph</option>
+							<option value="2-5-bullet-points">bullet points</option>
+						</select> in <select v-model="aiOptions.language" class="rounded bg-orange-200/20 border-0 text-orange-800">
+							<option value="">original language</option>
+							<hr>
+							<option value="arabic">Arabic</option>
+							<option value="english">English</option>
+							<option value="french">French</option>
+							<option value="japanese">Japanese</option>
+							<option value="russian">Russian</option>
+							<option value="spanish">Spanish</option>
+							<hr>
+							<option value="got-dothraki">Dothraki</option>
+							<option value="lotr-elvish">Elvish</option>
+							<option value="klingon">Klingon</option>
+						</select> <button class="inline-block ml-2 bg-orange-200 rounded-full text-center text-orange-800 w-6 h-6">Go</button>
+					</form>
+
+					<div @click="askAi('Explain like I\'m 5')" class="cursor-pointer inline-block rounded-full p-2 pl-3 bg-cyan-50 border border-dashed border-cyan-300/50 text-cyan-900 text-md">
+						Explain like I'm 5 <button class="inline-block ml-2 bg-cyan-200 rounded-full text-center text-cyan-800 w-6 h-6">Go</button>
+					</div>
+				</div>
+
+				<form @submit.prevent="askAi()" class="flex g-2 border border-slate-200 focus-within:border-slate-400 rounded mt-2">
+					<input class="grow p-2 bg-transparent border-0 focus:ring-0" v-model="newMessage" required minlength="3" :placeholder="messages.length ? 'Ask follow-up' : `Ask anything about this ${this.page.type || 'website'}`">
+
+					<button v-if="askStatus === 'loading'" class="bg-transparent border-0 p-2">⏹️</button>
+					<button v-else class="bg-transparent border-0 p-2">Ask</button>
+				</form>
 			</template>
 			<template v-else>
 				<div v-if="similar_status === 'loading'" class="text-center py-4">
