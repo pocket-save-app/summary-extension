@@ -64,7 +64,7 @@ export default {
 			reqController: null,
 			converter: new Converter(),
 
-			view: 'summary',
+			view: 'ask',
 
 			// webpage data
 			status: 'saving',
@@ -81,14 +81,11 @@ export default {
 				icon: null,
 				content: '',
 				content_status: 'missing',
-				summary: null,
 			},
 
 			// summary data
-			summary_status: 'extracting-content',
 			aiOptions: {
-				model: 'openai-gpt-3.5-turbo',
-				promptTemplate: '2-5-bullet-points',
+				promptTemplate: '3-5 bullet points',
 				language: '',
 			},
 
@@ -108,9 +105,12 @@ export default {
 		this.loadSettings()
 		this.checkTab()
 	},
+	mounted() {
+		this.$refs.q.focus()
+	},
 	methods: {
 		loadSettings() {
-			chrome.storage.sync.get(['distinct_id', 'model', 'template', 'language']).then((kv) => {
+			chrome.storage.sync.get(['distinct_id', 'template', 'language']).then((kv) => {
 				console.log('got KV', kv)
 
 				if (kv.distinct_id) {
@@ -125,10 +125,6 @@ export default {
 
 				if (kv.language && kv.language !== this.aiOptions.language) {
 					this.aiOptions.language = kv.language
-				}
-
-				if (kv.model && kv.model !== this.aiOptions.model) {
-					this.aiOptions.model = kv.model
 				}
 			})
 		},
@@ -199,7 +195,6 @@ export default {
 					this.saveWebpage()
 				} else {
 					this.status = 'error'
-					this.summary_status = 'error'
 					this.error = `Unsupported content type "${data.contentType}"`
 				}
 			}
@@ -226,14 +221,7 @@ export default {
 				this.status = 'saved'
 
 				if (item.content_status === 'ready') {
-					this.summary_status = 'summarizing'
-					this.summarize()
 					this.loadSimilar()
-				} else if (item.content_status === 'missing' && urlIsYoutube(this.page.url)) {
-					this.summary_status = 'summarizing'
-					this.summarize()
-				} else {
-					this.summary_status = 'no-content'
 				}
 			}).catch(error => {
 				this.status = 'error'
@@ -252,17 +240,14 @@ export default {
 				this.page.content_status = item.content_status
 				this.status = 'saved'
 
-				this.summary_status = 'summarizing'
-				this.summarize()
-
 				if (item.content_status === 'ready') {
 					this.loadSimilar()
 				}
 			}).catch(error => {
-				this.status = 'error'
-				this.summary_status = 'error'
-				this.error = error.message
 				console.error('save-url error', error)
+
+				this.status = 'error'
+				this.error = error.message
 			})
 		},
 
@@ -321,60 +306,6 @@ export default {
 			})
 		},
 
-		summarize() {
-			if (this.status === 'saving') {
-				return
-			}
-
-			if (this.page.content === 'ready' && this.page.content.length < 200) {
-				this.summary_status = 'no-content'
-				return
-			}
-
-			console.log(this.page.id, 'Load summary')
-
-			this.summary_status = 'summarizing'
-
-			if (this.reqController) {
-				this.reqController.abort()
-			}
-
-			this.reqController = new AbortController();
-
-			let model = this.aiOptions.model
-
-			fetch(`${this.apiHost}/items/${this.page.id}/summary?model=${model}&template=${this.aiOptions.promptTemplate}&language=${this.aiOptions.language}`, {
-				signal: this.reqController.signal,
-			}).then(response => {
-				console.log('response summarize', response.status)
-
-				if (response.ok) {
-					return response.text()
-				} else {
-					response.text().then(text => {
-						console.log('summarize error', text)
-						this.error = text
-					})
-
-					throw new Error(response.statusText)
-				}
-			}).then(data => {
-				this.page.summary = this.converter.makeHtml(data.trim())
-				this.summary_status = 'ready'
-
-				if (this.similar_status === 'idle') {
-					this.loadSimilar()
-				}
-			}).catch(error => {
-				if (error.name !== 'AbortError') {
-					console.error('summarize error', error)
-					this.summary_status = 'error'
-					this.error = error.message
-				}
-			}).finally(() => {
-				this.reqController = null
-			})
-		},
 		loadSimilar() {
 			console.log(this.page.id, 'Load similar')
 			this.similar_status = 'loading'
@@ -432,78 +363,16 @@ export default {
 		</div>
 
 		<div class="flex text-center">
-			<div class="flex-1 py-3 cursor-pointer" :class="view === 'summary' ? 'font-bold bg-slate-50/70 backdrop-opacity-30' : 'hover:bg-slate-100 font-medium'" @click="setView('summary')">
-				Summary
-			</div>
-			<div class="flex-1 py-3 cursor-pointer" :class="view === 'ask' ? 'font-bold bg-slate-50/70 backdrop-opacity-30' : 'hover:bg-slate-100 font-medium'" @click="setView('ask')">
+			<div class="flex-1 py-3 cursor-pointer" :class="view === 'ask' ? 'font-bold bg-pocket' : 'hover:bg-stone-100 font-medium'" @click="setView('ask')">
 				Ask
 			</div>
-			<div class="flex-1 py-3 cursor-pointer" :class="view === 'similar' ? 'font-bold bg-slate-50/70 backdrop-opacity-30' : 'hover:bg-slate-100 font-medium'" @click="setView('similar')">
+			<div class="flex-1 py-3 cursor-pointer" :class="view === 'similar' ? 'font-bold bg-pocket' : 'hover:bg-stone-100 font-medium'" @click="setView('similar')">
 				Similar <span v-if="Array.isArray(similar) && similar.length" class="bg-indigo-100 dark:bg-indigo-900 p-1 ml-1 rounded" :class="similar.length ? 'text-indigo-900 dark:text-indigo-100' : 'text-neutral-700 dark:text-neutral-300'">{{ similar.length }}</span>
 			</div>
 		</div>
 
-		<div class="p-3 pb-4 bg-slate-50/70 backdrop-opacity-30">
-			<template v-if="view === 'summary'">
-				<div class="grid grid-cols-3 gap-3 mb-4">
-					<label class="text-slate-600 text-center">
-						AI Model:
-						<select v-model="aiOptions.model" class="w-full rounded bg-slate-200/50 border-0 p-1 text-slate-900">
-							<option value="anthropic-claude-3-haiku-20240307">Claude 3 Haiku</option>
-							<option value="anthropic-claude-3-sonnet-20240229">Claude 3 Sonnet</option>
-							<option value="google-gemini-pro">Gemini 1 Pro</option>
-							<option value="openai-gpt-3.5-turbo">GPT 3.5 Turbo</option>
-							<option value="openai-gpt-4-turbo">GPT 4 Turbo</option>
-							<option value="@cf/meta/llama-2-7b-chat-int8">Llama 2 7B</option>
-							<option value="@cf/meta/llama-3-8b-instruct">Llama 3 8B</option>
-						</select>
-					</label>
-
-					<label class="text-slate-600 text-center">
-						Format:
-						<select v-model="aiOptions.promptTemplate" class="w-full rounded bg-slate-200/50 border-0 p-1 text-slate-900">
-							<option value="short-paragraph">Short paragraph</option>
-							<option value="medium-paragraph">Medium paragraph</option>
-							<option value="2-5-bullet-points">Bullet points</option>
-						</select>
-					</label>
-
-					<label class="text-slate-600 text-center">
-						Language:
-						<select v-model="aiOptions.language" class="w-full rounded bg-slate-200/50 border-0 p-1 text-slate-900">
-							<option value="">No change</option>
-							<hr>
-							<option value="arabic">Arabic</option>
-							<option value="english">English</option>
-							<option value="french">French</option>
-							<option value="japanese">Japanese</option>
-							<option value="russian">Russian</option>
-							<option value="spanish">Spanish</option>
-							<hr>
-							<option value="got-dothraki">Dothraki</option>
-							<option value="lotr-elvish">Elvish</option>
-							<option value="klingon">Klingon</option>
-						</select>
-					</label>
-				</div>
-
-				<div v-if="status === 'saving' || summary_status === 'extracting-content'" class="text-center">
-					Extracting content..
-				</div>
-				<div v-else-if="summary_status === 'summarizing'" class="text-center">
-					<Loader :text="'Summarizing'"></Loader>
-				</div>
-				<div v-else-if="summary_status === 'no-content'" class="text-center text-red-500">
-					This page is not an article, so it can't be summarized..
-				</div>
-				<div v-else-if="summary_status === 'ready'">
-					<div class="page-summary" v-html="page.summary"></div>
-				</div>
-				<div v-else class="text-center text-red-700 text-lg">
-					Error summarizing this page ({{ error }})
-				</div>
-			</template>
-			<template v-else-if="view === 'ask'">
+		<div class="p-3 pb-4 bg-pocket">
+			<div v-show="view === 'ask'">
 				<div v-if="messages.length" id="ask-messages" class="overflow-y-auto h-72">
 					<div v-for="message in messages">
 						<p v-if="message.role === 'user'" class="text-stone-800 text-lg mb-1">{{ message.content }}</p>
@@ -581,7 +450,7 @@ export default {
 						</p>
 					</a>
 				</div>
-			</template>
+			</div>
 		</div>
 		
 
