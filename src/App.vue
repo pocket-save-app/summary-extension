@@ -207,6 +207,12 @@ export default {
 
 		setView(view: string) {
 			this.view = view
+
+			if (view === 'ask') {
+				setTimeout(() => {
+					this.$refs.q.focus()
+				}, 50)
+			}
 		},
 
 		saveWebpage() {
@@ -272,7 +278,7 @@ export default {
 		},
 		askAi(msg: string = null) {
 			this.askStatus = 'loading'
-			const $messages = document.getElementById('ask-messages')
+			const $messages = this.$refs.messages
 
 			this.messages.push({
 				role: 'user',
@@ -281,9 +287,11 @@ export default {
 
 			this.newMessage = ''
 
-			setTimeout(() => {
-				$messages.scrollTop = $messages.scrollHeight
-			}, 100)
+			if ($messages) {
+				setTimeout(() => {
+					$messages.scrollTop = $messages.scrollHeight
+				}, 50)
+			}
 
 			apiFetch(`pockets/${this.distinct_id}/items/${this.page.id}/messages`, {
 				body: this.messages,
@@ -297,9 +305,11 @@ export default {
 
 				this.askStatus = 'idle'
 
-				setTimeout(() => {
-					$messages.scrollTop = $messages.scrollHeight
-				}, 100)
+				if ($messages) {
+					setTimeout(() => {
+						$messages.scrollTop = $messages.scrollHeight
+					}, 50)
+				}
 			}).catch(error => {
 				this.askStatus = 'error'
 				console.warn('messages error', error)
@@ -329,14 +339,8 @@ export default {
 		}
 	},
 	watch: {
-		'aiOptions.model': function (model) {
-			console.log('change model', model)
-			chrome.storage.sync.set({ model })
-			this.summarize()
-		},
 		'aiOptions.promptTemplate': function (template) {
 			chrome.storage.sync.set({ template })
-			this.summarize()
 		},
 		'aiOptions.language': function (language) {
 			console.log('changed language', language)
@@ -346,7 +350,6 @@ export default {
 			} else {
 				chrome.storage.sync.remove('language')
 			}
-			this.summarize()
 		},
 	}
 }
@@ -357,7 +360,7 @@ export default {
 		<div class="flex gap-3 items-center py-4 px-3">
 			<h1 class="grow text-xl font-semibold">{{ page.title }}</h1>
 
-			<a :href="`https://dcd3a0a4.pocket-web.pages.dev/set-pocket//${distinct_id}`" target="_blank" class="inline-block min-w-24 text-center bg-slate-50/90 hover:bg-neutral-50/70 rounded p-1 text-sm font-medium text-slate-800 hover:text-slate:950">
+			<a :href="`https://dcd3a0a4.pocket-web.pages.dev/set-pocket//${distinct_id}`" target="_blank" class="inline-block min-w-32 text-center bg-slate-50/90 hover:bg-neutral-50/70 rounded p-1 text-sm font-medium text-slate-800 hover:text-slate:950">
 				View your library
 			</a>
 		</div>
@@ -373,7 +376,7 @@ export default {
 
 		<div class="p-3 pb-4 bg-pocket">
 			<div v-show="view === 'ask'">
-				<div v-if="messages.length" id="ask-messages" class="overflow-y-auto h-72">
+				<div v-if="messages.length" ref="messages" class="overflow-y-auto h-72">
 					<div v-for="message in messages">
 						<p v-if="message.role === 'user'" class="text-stone-800 text-lg mb-1">{{ message.content }}</p>
 						<div v-else class="text-slate-800 mb-3">
@@ -394,38 +397,43 @@ export default {
 
 					<form @submit.prevent="askAiSummarize" class="inline-block rounded-full p-2 pl-3 bg-amber-50 border border-dashed border-amber-300/60 text-orange-900 text-md">
 						Summarize as <select v-model="aiOptions.promptTemplate" class="rounded bg-orange-200/20 border-0 text-orange-800">
-							<option value="short-paragraph">short paragraph</option>
-							<option value="medium-paragraph">medium paragraph</option>
-							<option value="2-5-bullet-points">bullet points</option>
+							<option>short paragraph</option>
+							<option>medium paragraph</option>
+							<option value="3-5 bullet points">bullet points</option>
 						</select> in <select v-model="aiOptions.language" class="rounded bg-orange-200/20 border-0 text-orange-800">
 							<option value="">original language</option>
 							<hr>
-							<option value="arabic">Arabic</option>
-							<option value="english">English</option>
-							<option value="french">French</option>
-							<option value="japanese">Japanese</option>
-							<option value="russian">Russian</option>
-							<option value="spanish">Spanish</option>
+							<option>Arabic</option>
+							<option>English</option>
+							<option>French</option>
+							<option>Japanese</option>
+							<option>Russian</option>
+							<option>Spanish</option>
 							<hr>
-							<option value="got-dothraki">Dothraki</option>
-							<option value="lotr-elvish">Elvish</option>
-							<option value="klingon">Klingon</option>
+							<option value="Dothraki (got)">Dothraki</option>
+							<option value="Elvish (lotr)">Elvish</option>
+							<option>Klingon</option>
 						</select> <button class="inline-block ml-2 bg-orange-200 rounded-full text-center text-orange-800 w-6 h-6">Go</button>
 					</form>
 
-					<div @click="askAi('Explain like I\'m 5')" class="cursor-pointer inline-block rounded-full p-2 pl-3 bg-cyan-50 border border-dashed border-cyan-300/50 text-cyan-900 text-md">
+					<div @click="askAi('Explain like I\'m five')" class="cursor-pointer inline-block rounded-full p-2 pl-3 bg-cyan-50 border border-dashed border-cyan-300/50 text-cyan-900 text-md">
 						Explain like I'm 5 <button class="inline-block ml-2 bg-cyan-200 rounded-full text-center text-cyan-800 w-6 h-6">Go</button>
 					</div>
 				</div>
 
-				<form @submit.prevent="askAi()" class="flex g-2 border border-slate-200 focus-within:border-slate-400 rounded mt-2">
-					<input class="grow p-2 bg-transparent border-0 focus:ring-0" v-model="newMessage" required minlength="3" :placeholder="messages.length ? 'Ask follow-up' : `Ask anything about this ${this.page.type || 'website'}`">
+				<form @submit.prevent="askAi()" class="flex items-center g-2 border border-stone-200 bg-white focus-within:border-stone-300 focus-within:shadow-md rounded-lg mt-2">
+					<input class="grow p-2 pl-3 text-lg bg-transparent border-0 focus-visible:outline-0" ref="q" v-model="newMessage" required minlength="2" :placeholder="messages.length ? 'Ask follow-up' : `Ask anything about this ${this.page.type || 'website'}`">
 
-					<button v-if="askStatus === 'loading'" class="bg-transparent border-0 p-2">⏹️</button>
-					<button v-else class="bg-transparent border-0 p-2">Ask</button>
+					<div v-if="!messages.length" class="pr-2">
+						<button class="bg-amber-600 text-white rounded-lg border-0 p-2">Start chat</button>
+					</div>
+					<div v-else-if="newMessage.length > 1" class="pr-2">
+						<button class="bg-amber-600 text-white rounded-lg border-0 py-2 px-3">⬆</button>
+					</div>
 				</form>
-			</template>
-			<template v-else>
+			</div>
+
+			<div v-show="view === 'similar'">
 				<div v-if="similar_status === 'loading'" class="text-center py-4">
 					<Loader :text="'Loading'"></Loader>
 				</div>

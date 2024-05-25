@@ -16,6 +16,14 @@ body {
 	padding: 0;
 }
 
+.bg-pocket-xx {
+	background-color: rgb(246, 244, 239);
+}
+
+.bg-pocket {
+	background-color: #f3f3ee;
+}
+
 .app-screen {
 	min-height: 200px;
 }
