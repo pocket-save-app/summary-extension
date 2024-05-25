@@ -19,7 +19,7 @@ interface ResponseWithData extends Response {
 	data?: any
 }
 
-async function apiFetch(path: string, options: RequestInit): Promise<ResponseWithData> {
+async function apiFetch(path: string, options: RequestInit = {}): Promise<ResponseWithData> {
 	const url = new URL(path, 'https://pocket-api.unallow.com')
 
 	options.headers = new Headers({
@@ -60,8 +60,6 @@ export default {
 	data() {
 		return {
 			id: chrome.runtime.id,
-			//apiHost: 'http://localhost:8787',
-			apiHost: 'https://pocket-api.unallow.com',
 			distinct_id: crypto.randomUUID(),
 			reqController: null,
 			converter: new Converter(),
@@ -219,21 +217,9 @@ export default {
 		saveWebpage() {
 			this.status = 'saving'
 
-			fetch(`${this.apiHost}/pockets/${this.distinct_id}/save-webpage`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify(this.page),
-			}).then(response => {
-				console.log('save-webpage response', response.ok, response.status, response.statusText)
-
-				if (response.ok) {
-					return response.json()
-				} else {
-					throw new Error(response.statusText)
-				}
-			}).then(item => {
+			apiFetch(`pockets/${this.distinct_id}/save-webpage`, {
+				body: this.page,
+			}).then(({ data: item }) => {
 				console.log('save-webpage item', item)
 				this.page.id = item.id
 				this.page.content_status = item.content_status
@@ -257,21 +243,9 @@ export default {
 		saveUrl() {
 			this.status = 'saving'
 
-			fetch(`${this.apiHost}/pockets/${this.distinct_id}/save-url`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify(this.page),
-			}).then(response => {
-				console.log('save-url response', response.ok, response.status, response.statusText)
-
-				if (response.ok) {
-					return response.json()
-				} else {
-					throw new Error(response.statusText)
-				}
-			}).then(item => {
+			apiFetch(`pockets/${this.distinct_id}/save-url`, {
+				body: this.page,
+			}).then(({ data: item }) => {
 				console.log('save-url item', item)
 				this.page.id = item.id
 				this.page.type = item.type
@@ -405,19 +379,14 @@ export default {
 			console.log(this.page.id, 'Load similar')
 			this.similar_status = 'loading'
 
-			fetch(`${this.apiHost}/pockets/${this.distinct_id}/items/${this.page.id}/similar`).then(response => {
-				console.log('response similar', response.ok, response.status, response.statusText, response.headers.get('content-type'))
-
-				return response.json()
-			}).then(similar => {
-				this.similar = similar
-				this.similar_status = 'loaded'
-			}).catch(error => {
-				if (error.name !== 'AbortError') {
-					console.error('similar error', error)
+			apiFetch(`pockets/${this.distinct_id}/items/${this.page.id}/similar`)
+				.then(({ data: similar }) => {
+					this.similar = similar
+					this.similar_status = 'loaded'
+				}).catch(error => {
+					console.warn('similar error', error)
 					this.similar_status = 'error'
-				}
-			})
+				})
 		},
 		parsedUrl(url: string) {
 			return new URL(url)
@@ -457,8 +426,8 @@ export default {
 		<div class="flex gap-3 items-center py-4 px-3">
 			<h1 class="grow text-xl font-semibold">{{ page.title }}</h1>
 
-			<a :href="`${apiHost}/pockets/${distinct_id}/items?redirect=app`" target="_blank" class="inline-block min-w-24 text-center bg-slate-50/90 hover:bg-neutral-50/70 rounded p-1 text-sm font-medium text-slate-800 hover:text-slate:950">
-				View library
+			<a :href="`https://dcd3a0a4.pocket-web.pages.dev/set-pocket//${distinct_id}`" target="_blank" class="inline-block min-w-24 text-center bg-slate-50/90 hover:bg-neutral-50/70 rounded p-1 text-sm font-medium text-slate-800 hover:text-slate:950">
+				View your library
 			</a>
 		</div>
 
