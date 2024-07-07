@@ -23,7 +23,9 @@ async function apiFetch(path: string, options: RequestInit = {}): Promise<Respon
 	const url = new URL(path, 'https://pocket-api.unallow.com')
 
 	options.headers = new Headers({
-		'authorization': 'c3843947-b32d-46a1-8605-b7536ee4d58f',
+		'authorization': 'Bearer c3843947-b32d-46a1-8605-b7536ee4d58f',
+		'x-platform': 'chrome_extension',
+		'x-version': '1.9.0',
 		...(options.headers || {}),
 	})
 
@@ -360,7 +362,7 @@ export default {
 		<div class="flex gap-3 items-center py-4 px-3">
 			<h1 class="grow text-xl font-semibold">{{ page.title }}</h1>
 
-			<a :href="`https://dcd3a0a4.pocket-web.pages.dev/set-pocket//${distinct_id}`" target="_blank" class="inline-block min-w-32 text-center bg-slate-50/90 hover:bg-neutral-50/70 rounded p-1 text-sm font-medium text-slate-800 hover:text-slate:950">
+			<a :href="`https://pocket-web.unallow.com/set-pocket/${distinct_id}`" target="_blank" class="inline-block min-w-32 text-center bg-slate-50/90 hover:bg-neutral-50/70 rounded p-1 text-sm font-medium text-slate-800 hover:text-slate:950">
 				View your library
 			</a>
 		</div>
