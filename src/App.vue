@@ -380,7 +380,7 @@ export default {
 					<div v-for="message in messages">
 						<p v-if="message.role === 'user'" class="text-stone-800 text-lg mb-1">{{ message.content }}</p>
 						<div v-else class="text-slate-800 mb-3">
-							<div v-html="converter.makeHtml(message.content)" class="mb-1"></div>
+							<div v-html="converter.makeHtml(message.content)" class="mb-1 chat-response"></div>
 							<p class="text-neutral-500">
 								<small class="text-slate-600 hover:text-slate-800">Read Aloud</small>
 								&middot;
@@ -390,6 +390,7 @@ export default {
 					</div>
 
 					<Loader v-if="askStatus === 'loading'" :text="''"></Loader>
+					<p v-else-if="askStatus === 'error'" class="text-red-500">Error connecting to the mainframe</p>
 				</div>
 				<!-- <div v-else class="h-24 mt-28 mb-20 bg-white/80 border border-dashed border-white/50 rounded"> -->
 				<div v-else class="flex items-center gap-3 h-72">
@@ -467,29 +468,29 @@ export default {
 </template>
 
 <style>
-.page-summary > * {
-	margin-bottom: 0.7rem;
+.chat-response > * {
+	margin-bottom: 0.5rem;
 }
 
-.page-summary > h1,
-.page-summary > h2,
-.page-summary > h3,
-.page-summary > h4,
-.page-summary > h5,
-.page-summary > h6 {
+.chat-response > h1,
+.chat-response > h2,
+.chat-response > h3,
+.chat-response > h4,
+.chat-response > h5,
+.chat-response > h6 {
 	font-weight: 600;
 
 }
 
-.page-summary > *:last-child {
+.chat-response > *:last-child {
 	margin-bottom: 0;
 }
 
-.page-summary ul {
+.chat-response ul {
 	list-style: disc;
 }
 
-.page-summary ul li {
+.chat-response ul li {
 	margin-left: 1em;
 	margin-bottom: 0.2rem;
 	line-height: 1.5em;
