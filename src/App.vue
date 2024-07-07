@@ -23,7 +23,7 @@ async function apiFetch(path: string, options: RequestInit = {}): Promise<Respon
 	const url = new URL(path, 'https://pocket-api.unallow.com')
 
 	options.headers = new Headers({
-		'authorization': 'Bearer c3843947-b32d-46a1-8605-b7536ee4d58f',
+		'authorization': `Bearer ${import.meta.env.VITE_API_TOKEN}`,
 		'x-platform': 'chrome_extension',
 		'x-version': '1.9.0',
 		...(options.headers || {}),
