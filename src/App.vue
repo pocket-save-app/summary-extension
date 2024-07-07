@@ -320,7 +320,7 @@ export default {
 			console.log(this.page.id, 'Load similar')
 			this.similar_status = 'loading'
 
-			apiFetch(`pockets/${this.distinct_id}/items/${this.page.id}/similar`)
+			apiFetch(`pockets/${this.distinct_id}/items/${this.page.id}/similar?expand=item`)
 				.then(({ data: similar }) => {
 					this.similar = similar
 					this.similar_status = 'loaded'
