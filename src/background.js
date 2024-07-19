@@ -20,3 +20,5 @@ chrome.runtime.onInstalled.addListener((details) => {
 		chrome.declarativeContent.onPageChanged.addRules(rules);
 	});
 });
+
+const key = "openaikey";
