@@ -69,6 +69,7 @@ export default {
 
 			// webpage data
 			status: 'saving',
+			error: '',
 			page: {
 				id: null,
 				url: '',
@@ -84,22 +85,15 @@ export default {
 				content_status: 'missing',
 			},
 
-			// summary data
-			aiOptions: {
-				promptTemplate: '3-5 bullet points',
-				language: '',
-			},
+			// ask ai
+			messages: [],
+			prompts: new Set(['Short summary', 'Bullet points', 'Explain it like I\'m 5',]),
+			askStatus: 'idle',
+			newMessage: '',
 
 			// similar data
 			similar_status: 'idle',
 			similar: [],
-
-			// ask ai
-			messages: [],
-			askStatus: 'idle',
-			newMessage: '',
-
-			error: '',
 		}
 	},
 	created() {
@@ -125,7 +119,11 @@ export default {
 			this.page.icon = tab.favIconUrl
 
 			function extractPageContent() {
-				console.log('Summarize', window.location.hostname, document.contentType, document.title)
+				console.log('[Snapshot]', 'took a snapshot of the DOM', {
+					hostname: window.location.hostname,
+					contentType: document.contentType,
+					title: document.title,
+				})
 
 				return {
 					contentType: document.contentType,
@@ -191,6 +189,8 @@ export default {
 				target: { tabId: tab.id },
 				func: extractPageContent,
 			}, setContent);
+
+			this.loadMessagesPrompts()
 		},
 
 		setView(view: string) {
@@ -216,6 +216,7 @@ export default {
 
 				if (item.content_status === 'ready') {
 					this.loadSimilar()
+					this.loadMessages()
 				}
 			}).catch(error => {
 				this.status = 'error'
@@ -244,64 +245,15 @@ export default {
 				this.error = error.message
 			})
 		},
+		removeItem() {
+			console.log(this.page.id, 'remove from pocket')
+			this.status = 'deleting'
 
-		copyText(event: MouseEvent, text: string) {
-			navigator.clipboard.writeText(text)
-
-			const target = event.target as HTMLElement
-			const originalText = target.textContent
-			target.textContent = 'Copied!'
-
-			setTimeout(() => {
-				target.textContent = originalText
-			}, 1500)
-		},
-
-		askAiSummarize() {
-			let msg = `Summarize as ${this.aiOptions.promptTemplate}`
-			if (this.aiOptions.language) {
-				msg += ` in ${this.aiOptions.language}`
-			}
-			this.askAi(msg)
-		},
-		askAi(msg: string = null) {
-			this.askStatus = 'loading'
-			const $messages = this.$refs.messages
-
-			this.messages.push({
-				role: 'user',
-				content: msg || this.newMessage,
-			})
-
-			this.newMessage = ''
-
-			if ($messages) {
-				setTimeout(() => {
-					$messages.scrollTop = $messages.scrollHeight
-				}, 50)
-			}
-
-			apiFetch(`pockets/${this.distinct_id}/items/${this.page.id}/messages`, {
-				body: this.messages,
-			}).then(({ data: message }) => {
-				console.log('message', message)
-
-				this.messages.push({
-					role: 'assistant',
-					content: message.trim(),
-				})
-
-				this.askStatus = 'idle'
-
-				if ($messages) {
-					setTimeout(() => {
-						$messages.scrollTop = $messages.scrollHeight
-					}, 50)
-				}
-			}).catch(error => {
-				this.askStatus = 'error'
-				console.warn('messages error', error)
-			})
+			apiFetch(`pockets/${this.distinct_id}/items/${this.page.id}`, {
+				method: 'delete',
+			}).then(() => {
+				window.close()
+			}).catch(console.warn)
 		},
 
 		loadSimilar() {
@@ -317,29 +269,83 @@ export default {
 					this.similar_status = 'error'
 				})
 		},
-		parsedUrl(url: string) {
-			return new URL(url)
+
+		loadMessagesPrompts() {
+			console.log(this.distinct_id, 'Load prompts')
+
+			apiFetch(`pockets/${this.distinct_id}/prompts`)
+				.then(({ data: prompts }) => {
+					prompts.forEach(prompt => this.prompts.add(prompt))
+				}).catch(error => {
+					console.warn(this.distinct_id, 'load prompts ERROR', error)
+				})
 		},
+		loadMessages() {
+			console.log(this.page.id, 'Load messages')
+
+			apiFetch(`pockets/${this.distinct_id}/items/${this.page.id}/messages`)
+				.then(({ data: messages }) => {
+					this.messages.push(...messages)
+					setTimeout(() => {
+						this.$refs.messages.scrollTop = this.$refs.messages.scrollHeight
+					}, 50)
+				}).catch(error => {
+					console.warn(this.page.id, 'load messages ERROR', error)
+				})
+		},
+
+		copyText(event: MouseEvent, text: string) {
+			navigator.clipboard.writeText(text)
+
+			const target = event.target as HTMLElement
+			const originalText = target.textContent
+			target.textContent = 'Copied!'
+
+			setTimeout(() => {
+				target.textContent = originalText
+			}, 1500)
+		},
+
+		askAi(msg: string = null) {
+			this.askStatus = 'loading'
+			const $messages = this.$refs.messages
+
+			this.messages.push({
+				role: 'user',
+				content: msg || this.newMessage,
+			})
+
+			this.newMessage = ''
+
+			setTimeout(() => {
+				$messages.scrollTop = $messages.scrollHeight
+			}, 50)
+
+			apiFetch(`pockets/${this.distinct_id}/items/${this.page.id}/messages`, {
+				body: this.messages,
+			}).then(({ data: message }) => {
+				this.messages.push({
+					role: 'assistant',
+					content: message.trim(),
+				})
+
+				this.askStatus = 'idle'
+
+				setTimeout(() => {
+					$messages.scrollTop = $messages.scrollHeight
+				}, 50)
+			}).catch(error => {
+				this.askStatus = 'error'
+				console.warn('messages error', error)
+			})
+		},
+
 		urlHostname(url: string) {
 			const parsed = new URL(url)
 
 			return parsed.hostname.startsWith('www.') ? parsed.hostname.slice(4) : parsed.hostname
 		}
 	},
-	watch: {
-		'aiOptions.promptTemplate': function (template) {
-			chrome.storage.sync.set({ template })
-		},
-		'aiOptions.language': function (language) {
-			console.log('changed language', language)
-
-			if (language) {
-				chrome.storage.sync.set({ language })
-			} else {
-				chrome.storage.sync.remove('language')
-			}
-		},
-	}
 }
 </script>
 
@@ -361,73 +367,42 @@ export default {
 				Similar <span v-if="Array.isArray(similar) && similar.length" class="bg-indigo-100 dark:bg-indigo-900 p-1 ml-1 rounded" :class="similar.length ? 'text-indigo-900 dark:text-indigo-100' : 'text-neutral-700 dark:text-neutral-300'">{{ similar.length }}</span>
 			</div>
 		</div>
+ 		-->
 
-		<div class="p-3 pb-4 bg-pocket">
-			<div v-show="view === 'ask'">
-				<div v-if="messages.length" ref="messages" class="overflow-y-auto h-72">
-					<div v-for="message in messages">
-						<p v-if="message.role === 'user'" class="text-stone-800 text-lg mb-1">{{ message.content }}</p>
-						<div v-else class="text-slate-800 mb-3">
-							<div v-html="converter.makeHtml(message.content)" class="mb-1 chat-response"></div>
-							<p class="text-neutral-500">
-								<small class="text-slate-600 hover:text-slate-800">Read Aloud</small>
-								&middot;
-								<small class="text-slate-600 hover:text-slate-800 cursor-pointer" @click="$event => copyText($event, message.content)">Copy</small>
-							</p>
-						</div>
-					</div>
-
-					<Loader v-if="askStatus === 'loading'" :text="''"></Loader>
-					<p v-else-if="askStatus === 'error'" class="text-red-500">Error connecting to the mainframe</p>
-				</div>
-				<!-- <div v-else class="h-24 mt-28 mb-20 bg-white/80 border border-dashed border-white/50 rounded"> -->
-				<div v-else class="flex items-center gap-3 h-72">
-					<!-- <p class="text-slate-800 p-4">Ask anything about this website</p> -->
-
-					<form @submit.prevent="askAiSummarize" class="inline-block rounded-full p-2 pl-3 bg-amber-50 border border-dashed border-amber-300/60 text-orange-900 text-md">
-						Summarize as <select v-model="aiOptions.promptTemplate" class="rounded bg-orange-200/20 border-0 text-orange-800">
-							<option>short paragraph</option>
-							<option>medium paragraph</option>
-							<option value="3-5 bullet points">bullet points</option>
-						</select> in <select v-model="aiOptions.language" class="rounded bg-orange-200/20 border-0 text-orange-800">
-							<option value="">original language</option>
-							<hr>
-							<option>Arabic</option>
-							<option>English</option>
-							<option>French</option>
-							<option>Japanese</option>
-							<option>Russian</option>
-							<option>Spanish</option>
-							<hr>
-							<option value="Dothraki (got)">Dothraki</option>
-							<option value="Elvish (lotr)">Elvish</option>
-							<option>Klingon</option>
-						</select> <button class="inline-block ml-2 bg-orange-200 rounded-full text-center text-orange-800 w-6 h-6">Go</button>
-					</form>
-
-					<div @click="askAi('Explain like I\'m five')" class="cursor-pointer inline-block rounded-full p-2 pl-3 bg-cyan-50 border border-dashed border-cyan-300/50 text-cyan-900 text-md">
-						Explain like I'm 5 <button class="inline-block ml-2 bg-cyan-200 rounded-full text-center text-cyan-800 w-6 h-6">Go</button>
-					</div>
+		<div v-show="view === 'ask'" class="overflow-y-auto h-80 pb-14" ref="messages">
+			<div v-for="message in messages" class="mx-3 message" :class="{'mt-2': message.role === 'user'}">
+				<p v-if="message.role === 'user'" class="text-stone-800 text-lg mb-1">{{ message.content }}</p>
+				<div v-else class="text-slate-800 mb-3">
+					<div v-html="converter.makeHtml(message.content)" class="chat-response"></div>
+					<p v-if="message.content.length > 100" class="text-neutral-500 mt-1">
+						<small class="text-slate-600 hover:text-slate-800">Read Aloud</small>
+						&middot;
+						<small class="text-slate-600 hover:text-slate-800 cursor-pointer" @click="$event => copyText($event, message.content)">Copy</small>
+					</p>
 				</div>
 
-				<form @submit.prevent="askAi()" class="flex items-center g-2 border border-stone-200 bg-white focus-within:border-stone-300 focus-within:shadow-md rounded-lg mt-2">
-					<input class="grow p-2 pl-3 text-lg bg-transparent border-0 focus-visible:outline-0" ref="q" v-model="newMessage" required minlength="2" :placeholder="messages.length ? 'Ask follow-up' : `Ask anything about this ${this.page.type || 'website'}`">
+			<Loader v-if="askStatus === 'loading'" class="mx-3" :text="''"></Loader>
+			<p v-else-if="askStatus === 'error'" class="mx-3 text-red-500">Error connecting to the mainframe</p>
 
-					<div v-if="!messages.length" class="pr-2">
-						<button class="bg-amber-600 text-white rounded-lg border-0 p-2">Start chat</button>
+			<div v-if="!messages.length" class="flex items-center h-64">
+				<div class="mx-3">
+					<p class="text-slate-700 mb-2">Try these prompts:</p>
+
+					<div class="flex items-center gap-3">
+						<button v-for="prompt in prompts" @click="askAi(prompt)" class="rounded-full p-2 px-3 bg-amber-50 border border-dashed border-amber-200 text-amber-900 text-[14px] hover:border-solid hover:bg-amber-100">
+							{{ prompt }}
+						</button>
 					</div>
-					<div v-else-if="newMessage.length > 1" class="pr-2">
-						<button class="bg-amber-600 text-white rounded-lg border-0 py-2 px-3">⬆</button>
-					</div>
-				</form>
+
+					<p class="text-slate-700 mt-2">Or ask below ⤵</p>
+				</div>
 			</div>
 
-			<div v-show="view === 'similar'">
-				<div v-if="similar_status === 'loading'" class="text-center py-4">
-					<Loader :text="'Loading'"></Loader>
-				</div>
-				<div v-else-if="similar_status === 'error'" class="text-center text-red-700 py-4">
-					Error loading similar items ({{ error }})
+			<form @submit.prevent="askAi()" class="absolute left-3 right-3 bottom-2 flex items-center g-2 border border-stone-200 bg-white focus-within:border-stone-300 focus-within:shadow-md rounded-lg">
+				<input class="grow p-2 pl-3 text-lg bg-transparent border-0 focus-visible:outline-0" ref="q" v-model="newMessage" required minlength="2" :placeholder="messages.length ? 'Ask follow-up' : `Ask anything about this ${this.page.type || 'website'}`">
+
+				<div v-if="!messages.length" class="pr-2">
+					<button class="bg-amber-600 text-white rounded-lg border-0 p-2" :disabled="!page.id">Start chat</button>
 				</div>
 				<div v-else-if="!similar.length" class="text-center text-blue-800 py-4">
 					Save more articles, videos or images, so we can start showing you similar ones.
@@ -449,9 +424,6 @@ export default {
 				</div>
 			</div>
 		</div>
-		
-
-		<!-- <pre>{{ page }}</pre> -->
 	</div>
 </template>
 
