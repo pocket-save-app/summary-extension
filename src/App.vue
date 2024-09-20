@@ -351,14 +351,32 @@ export default {
 
 <template>
 	<div class="app-screen">
-		<div class="flex gap-3 items-center py-4 px-3">
-			<h1 class="grow text-xl font-semibold">{{ page.title }}</h1>
 
-			<a :href="`https://pocket-web.unallow.com/set-pocket/${distinct_id}`" target="_blank" class="inline-block min-w-32 text-center bg-slate-50/90 hover:bg-neutral-50/70 rounded p-1 text-sm font-medium text-slate-800 hover:text-slate:950">
+		<div class="flex gap-3 py-2 items-center border-b border-stone-100">
+			<div class="grow px-3 text-stone-500">
+				<p v-if="status === 'saving'">Saving to library..</p>
+				<p v-else-if="status === 'saved'">Saved in your library. <u class="text-stone-600 cursor-pointer" @click="removeItem">Remove</u></p>
+				<p v-else-if="status === 'deleting'">Removing..</p>
+				<code v-else>status={{ status }}</code>
+			</div>
+
+			<a :href="`https://pocket-web.unallow.com/set-pocket/${distinct_id}`" target="_blank" class="mx-3 py-1 px-3 inline-block rounded-md bg-amber-600 hover:bg-amber-500 text-white">
 				View your library
 			</a>
 		</div>
 
+		<h1 class="m-3 mt-4 text-2xl">{{ page.title }}</h1>
+
+		<div class="flex text-center border-b border-stone-200">
+			<button class="flex-1 py-3 border-b-2 mb-[-1px]" :class="view === 'ask' ? 'font-bold border-orange-200 text-amber-600' : 'border-transparent text-neutral-700 font-medium hover:font-semibold'" @click="setView('ask')">
+				Ask
+			</button>
+			<button class="flex-1 py-3 border-b-2 mb-[-1px]" :class="view === 'similar' ? 'font-bold border-orange-200 text-amber-600' : 'border-transparent text-neutral-700 font-medium hover:font-semibold'" @click="setView('similar')">
+				Similar <span v-if="Array.isArray(similar) && similar.length" class="p-1 ml-1 rounded bg-orange-100 text-amber-600">{{ similar.length }}</span>
+			</button>
+		</div>
+
+		<!-- 
 		<div class="flex text-center">
 			<div class="flex-1 py-3 cursor-pointer" :class="view === 'ask' ? 'font-bold bg-pocket' : 'hover:bg-stone-100 font-medium'" @click="setView('ask')">
 				Ask
@@ -380,6 +398,7 @@ export default {
 						<small class="text-slate-600 hover:text-slate-800 cursor-pointer" @click="$event => copyText($event, message.content)">Copy</small>
 					</p>
 				</div>
+			</div>
 
 			<Loader v-if="askStatus === 'loading'" class="mx-3" :text="''"></Loader>
 			<p v-else-if="askStatus === 'error'" class="mx-3 text-red-500">Error connecting to the mainframe</p>
@@ -404,23 +423,43 @@ export default {
 				<div v-if="!messages.length" class="pr-2">
 					<button class="bg-amber-600 text-white rounded-lg border-0 p-2" :disabled="!page.id">Start chat</button>
 				</div>
-				<div v-else-if="!similar.length" class="text-center text-blue-800 py-4">
-					Save more articles, videos or images, so we can start showing you similar ones.
+				<div v-else-if="newMessage.length > 1" class="pr-2">
+					<button class="bg-amber-600 text-white rounded-lg border-0 py-2 px-3">⬆</button>
 				</div>
-				<div v-else-if="similar.length" class="grid grid-cols-3 gap-3">
-					<a v-for="item in similar" :key="item.id" :href="item.url" target="_blank" class="bg-white hover:bg-slate-50 rounded" :class="{'row-span-2': item.image}">
-						<img v-if="item.source === 'url' && item.image" :src="item.image" class="w-full h-24 object-cover rounded-t" :alt="item.title">
-						<img v-else-if="['file', 'url-file'].includes(item.source) && item.type.startsWith('image/')" :src="`https://pocket.layered.workers.dev/items/${item.id}/file`" class="w-full h-24 object-cover rounded-t" :alt="item.title">
+			</form>
+		</div>
 
-						<h3 class="mt-2 mb-2 px-3" :class="item.title.length > 50 ? 'font-bold' : 'font-medium text-lg'">{{ item.title }}</h3>
-
-						<p v-if="item.excerpt" class="mb-2 px-3">{{ item.excerpt }}</p>
-
-						<p class="px-3 text-neutral-600 mb-3">
-							<img v-if="item.icon" :src="item.icon" class="inline w-4 h-4 object-cover" :alt="item.site_name || item.title">
-							{{ urlHostname(item.url) }}
-						</p>
+		<div v-show="view === 'similar'">
+			<div v-if="similar_status === 'loading'" class="text-center py-6">
+				<Loader :text="'Loading'"></Loader>
+			</div>
+			<div v-else-if="similar_status === 'error'" class="text-center text-red-700 py-4">
+				Error loading similar items ({{ error }})
+			</div>
+			<div v-else-if="!similar.length" class="text-center text-blue-800 py-4">
+				Save more articles, videos or images, so we can start showing you similar ones.
+			</div>
+			<div v-else-if="similar.length" class="p-3 divide-y divide-stone-100">
+				<div v-for="item in similar" class="flex items-center gap-x-3 md:px-0 border-stone-200 bg-transparent py-2">
+					<a :href="item.url" target="_blank" class="block min-w-24">
+						<img v-if="item.source === 'url' && item.image" :src="item.image" :alt="item.title" class="w-24 h-24 rounded-lg object-cover" />
+						<img v-else-if="item.source === 'url-file' && item.type.startsWith('image/')" :src="`https://pocket-api.unallow.com/items/${item.id}/file`" :alt="item.title" class="w-24 h-24 rounded-lg object-cover" />
+						<div v-else class="w-24 h-20 rounded-lg bg-slate-100 border border-slate-200"></div>
 					</a>
+
+					<div>
+						<a :href="item.url" target="_blank" class="block mb-1">
+							<p class="text-stone-800 font-semibold mb-1">{{ item.title }}</p>
+							<p class="text-stone-600 break-word text-balance line-clamp-2">{{ item.excerpt }}</p>
+						</a>
+						<p class="text-stone-500">
+							Similarity: <span v-if="item.score >= 0.7" class="rounded px-1 bg-green-100 text-green-800" :title="item.score">High</span><span v-else-if="item.score >= 0.4" :title="item.score" class="rounded px-1 bg-orange-100 text-orange-800">Medium</span><span v-else :title="item.score" class="rounded px-1 bg-red-100 text-red-800">Low</span>
+							<!-- &middot;
+							<small>{{ new Date(item.updated_at).toLocaleString('default', { dateStyle: 'medium', timeStyle: 'short' }) }}</small> -->
+							&middot;
+							<a :href="item.url" target="_blank" class="text-stone-700">{{ urlHostname(item.url) }}</a>
+						</p>
+					</div>
 				</div>
 			</div>
 		</div>

@@ -7,7 +7,9 @@ body {
 	min-width: 320px;
 	cursor: default;
 
-	background-image: linear-gradient(225deg, #e9defa 0%, #fbfcdb 100%);
+	/* background-image: linear-gradient(225deg, #e9defa 0%, #fbfcdb 100%); */
+	/* background-color: #f3f3ed; */
+	background-color: #fcfcf9;
 }
 
 #app {
@@ -21,7 +23,7 @@ body {
 }
 
 .bg-pocket {
-	background-color: #f3f3ee;
+	background-color: #fcfcf9;
 }
 
 .app-screen {
