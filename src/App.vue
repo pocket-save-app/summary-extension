@@ -62,8 +62,7 @@ export default {
 	data() {
 		return {
 			id: chrome.runtime.id,
-			distinct_id: crypto.randomUUID(),
-			reqController: null,
+			distinct_id: null,
 			converter: new Converter(),
 
 			view: 'ask',
@@ -104,35 +103,22 @@ export default {
 		}
 	},
 	created() {
-		this.loadSettings()
 		this.checkTab()
 	},
 	mounted() {
 		this.$refs.q.focus()
 	},
 	methods: {
-		loadSettings() {
-			chrome.storage.sync.get(['distinct_id', 'template', 'language']).then((kv) => {
-				console.log('got KV', kv)
-
-				if (kv.distinct_id) {
-					this.distinct_id = kv.distinct_id
-				} else {
-					chrome.storage.sync.set({ distinct_id: this.distinct_id })
-				}
-
-				if (kv.template && kv.template !== this.aiOptions.promptTemplate) {
-					this.aiOptions.promptTemplate = kv.template
-				}
-
-				if (kv.language && kv.language !== this.aiOptions.language) {
-					this.aiOptions.language = kv.language
-				}
-			})
-		},
 		async checkTab() {
-			const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-			console.log('tab', tab)
+			const [ tabs, id ] = await Promise.all([
+				chrome.tabs.query({ active: true, lastFocusedWindow: true }),
+				chrome.runtime.sendMessage('get-pocket-id')
+			])
+
+			const [ tab ] = tabs
+			this.distinct_id = id
+
+			console.log('[Snapshot]', 'tab', tab)
 
 			this.page.url = tab.url
 			this.page.title = tab.title
