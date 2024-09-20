@@ -1,5 +1,5 @@
 <script lang="ts">
-import { urlIsYoutube } from '@layered/superurl'
+import { isYouTubeVideoUrl } from '@layered/superurl'
 import { Readability } from '@mozilla/readability'
 import { isPlainObject } from 'lodash-es'
 import { Converter } from 'showdown'
@@ -149,7 +149,7 @@ export default {
 					// set found page data
 					this.page = { ...this.page, ...data.page }
 
-					const isYoutubeVideo = urlIsYoutube(this.page.url)
+					const isYoutubeVideo = isYouTubeVideoUrl(this.page.url)
 
 					if (!isYoutubeVideo) {
 						// extract content with Readability
