@@ -1,7 +1,7 @@
 {
   "name": "site-summary-extension",
   "private": true,
-  "version": "1.9.0",
+  "version": "1.11.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -18,7 +18,7 @@
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.0.0-beta.18",
     "@tailwindcss/forms": "^0.5.7",
-    "@types/chrome": "^0.0.248",
+    "@types/chrome": "^0.0.270",
     "@vitejs/plugin-vue": "^4.2.3",
     "autoprefixer": "^10.4.16",
     "postcss": "^8.4.31",

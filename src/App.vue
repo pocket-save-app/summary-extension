@@ -36,7 +36,7 @@ async function apiFetch(path: string, options: RequestInit = {}): Promise<Respon
 	options.headers = new Headers({
 		'authorization': `Bearer ${import.meta.env.VITE_API_TOKEN}`,
 		'x-platform': 'chrome_extension',
-		'x-version': '1.9.0',
+		'x-version': '1.11.0',
 		...(options.headers || {}),
 	})
 
@@ -45,7 +45,6 @@ async function apiFetch(path: string, options: RequestInit = {}): Promise<Respon
 		options.method ||= 'POST'
 
 		// check if body can be stringified
-		console.log('body type', options.body.constructor.name)
 		if (Array.isArray(options.body) || isPlainObject(options.body)) {
 			options.body = JSON.stringify(options.body)
 
@@ -133,14 +132,18 @@ export default {
 			const [ tab ] = tabs
 			this.distinct_id = id
 
-			console.log('[Snapshot]', 'tab', tab)
+			console.log('[hono]', 'tab', tab)
+
+			const url = new URL(tab.url)
+
+			console.log('[hono]', url.hostname)
 
 			this.page.url = tab.url
 			this.page.title = tab.title
 			this.page.icon = tab.favIconUrl
 
 			function extractPageContent() {
-				console.log('[Snapshot]', 'took a snapshot of the DOM', {
+				console.log('[hono]', 'took a snapshot of the DOM', {
 					hostname: window.location.hostname,
 					contentType: document.contentType,
 					title: document.title,
@@ -246,7 +249,8 @@ export default {
 			apiFetch(`pockets/${this.distinct_id}/save-webpage`, {
 				body: this.page,
 			}).then(({ data: item }) => {
-				console.log('save-webpage item', item)
+				console.log('[hono]', '/save-webpage OK', item)
+
 				this.page.id = item.id
 				this.page.content_status = item.content_status
 				this.status = 'saved'
@@ -256,8 +260,10 @@ export default {
 					this.loadMessages()
 				}
 			}).catch(error => {
+				console.log('[hono]', '/save-webpage ERROR', error)
+
 				this.status = 'error'
-				console.error('save-webpage error', error)
+				this.error = error.message
 			})
 		},
 		saveUrl() {
@@ -266,7 +272,8 @@ export default {
 			apiFetch(`pockets/${this.distinct_id}/save-url`, {
 				body: this.page,
 			}).then(({ data: item }) => {
-				console.log('save-url item', item)
+				console.log('[hono]', '/save-url OK', item)
+
 				this.page.id = item.id
 				this.page.type = item.type
 				this.page.content_status = item.content_status
@@ -276,7 +283,7 @@ export default {
 					this.loadSimilar()
 				}
 			}).catch(error => {
-				console.error('save-url error', error)
+				console.log('[hono]', '/save-url ERROR', error)
 
 				this.status = 'error'
 				this.error = error.message

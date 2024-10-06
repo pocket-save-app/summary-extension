@@ -1,11 +1,11 @@
 {
     "manifest_version": 3,
-    "name": "Summarize everything",
-    "description": "Summarize the long article you're about to read",
-    "version": "1.9.0",
+    "name": "Hono - Save and summarize everything",
+    "description": "Use the latest AI models on any article, video or document: summarize, extract key points, translate, generate quizes, and more",
+    "version": "1.11.0",
     "permissions": ["activeTab", "contextMenus", "declarativeContent", "storage", "scripting"],
     "action": {
-        "default_title": "Summarize now!",
+        "default_title": "Save and ask AI",
         "default_popup": "index.html"
     },
     "background": {
