@@ -74,6 +74,7 @@ export default {
 		return {
 			id: chrome.runtime.id,
 			distinct_id: null,
+			pocket: null,
 			converter: new Converter(),
 
 			view: 'ask',
@@ -105,6 +106,15 @@ export default {
 			// similar data
 			similar_status: 'idle',
 			similar: [],
+		}
+	},
+	computed: {
+		aiMessagesUsed() {
+			if (this.pocket) {
+				return Math.round(this.pocket.ai_messages / this.pocket.ai_messages_limit * 100)
+			} else {
+				return 0
+			}
 		}
 	},
 	created() {
@@ -201,6 +211,7 @@ export default {
 			} else if (blockedHostnames.includes(url.hostname)) {
 				window.open('https://myhono.com/try-other-website', '_blank')
 			} else {
+				this.loadPocket()
 				this.loadMessagesPrompts()
 
 				chrome.scripting.executeScript({
@@ -210,6 +221,13 @@ export default {
 			}
 		},
 
+		loadPocket() {
+			apiFetch(`pockets/${this.distinct_id}`)
+				.then(({ data: pocket }) => {
+					this.pocket = pocket
+				}).catch(error => {
+					console.warn('load pocket error', error)
+				})
 		},
 
 		setView(view: string) {
@@ -437,7 +455,7 @@ export default {
 		</div>
  		-->
 
-		<div v-show="view === 'ask'" class="overflow-y-auto h-80 pb-14" ref="messages">
+		<div v-show="view === 'ask'" class="overflow-y-auto h-96" :class="aiMessagesUsed > 80 ? 'pb-20' : 'pb-14'" ref="messages">
 			<div v-for="message in messages" class="mx-3 message" :class="{'mt-2': message.role === 'user'}">
 				<p v-if="message.role === 'user'" class="text-stone-800 text-lg mb-1">{{ message.content }}</p>
 				<div v-else class="text-slate-800 mb-3">
@@ -450,10 +468,10 @@ export default {
 				</div>
 			</div>
 
-			<Loader v-if="askStatus === 'loading'" class="mx-3" :text="''"></Loader>
+			<Loader v-if="askStatus === 'loading'" class="mx-3 mb-2" :text="''"></Loader>
 			<p v-else-if="askStatus === 'error'" class="mx-3 text-red-500">Error connecting to the mainframe</p>
 
-			<div v-if="!messages.length" class="flex items-center h-64">
+			<div v-if="!messages.length" class="flex items-center h-80">
 				<div class="mx-3">
 					<p class="text-slate-700 mb-2">Try these prompts:</p>
 
@@ -467,14 +485,20 @@ export default {
 				</div>
 			</div>
 
-			<form @submit.prevent="askAi()" class="absolute left-3 right-3 bottom-2 flex items-center g-2 border border-stone-200 bg-white focus-within:border-stone-300 focus-within:shadow-md rounded-lg">
-				<input class="grow p-2 pl-3 text-lg bg-transparent border-0 focus-visible:outline-0" ref="q" v-model="newMessage" required minlength="2" :placeholder="messages.length ? 'Ask follow-up' : `Ask anything about this ${this.page.type || 'website'}`">
+			<form @submit.prevent="askAi()" class="absolute left-3 right-3 bottom-2">
+				<div class="flex items-center g-2 border border-stone-200 bg-white focus-within:border-stone-300 focus-within:shadow-md rounded-lg">
+					<input class="grow p-2 pl-3 text-lg bg-transparent border-0 focus-visible:outline-0" ref="q" v-model="newMessage" required minlength="2" :placeholder="messages.length ? 'Ask follow-up' : `Ask anything about this ${this.page.type || 'website'}`">
 
-				<div v-if="!messages.length" class="pr-2">
-					<button class="bg-amber-600 text-white rounded-lg border-0 p-2" :disabled="!page.id">Start chat</button>
+					<div v-if="!messages.length" class="pr-2">
+						<button class="bg-amber-600 text-white rounded-lg border-0 p-2" :disabled="!page.id">Start chat</button>
+					</div>
+					<div v-else-if="newMessage.length > 1" class="pr-2">
+						<button class="bg-amber-600 text-white rounded-lg border-0 py-2 px-3">⬆</button>
+					</div>
 				</div>
-				<div v-else-if="newMessage.length > 1" class="pr-2">
-					<button class="bg-amber-600 text-white rounded-lg border-0 py-2 px-3">⬆</button>
+
+				<div v-if="aiMessagesUsed > 80" class="bg-red-50 rounded mt-2">
+					<div class="bg-red-100 rounded-l text-red-800 px-1" :style="{width: `${aiMessagesUsed}%`}">You've used {{ aiMessagesUsed }}% of your AI messages. <a href="https://myhono.com/plans" target="_blank" class="underline">Subscribe now to get more</a></div>
 				</div>
 			</form>
 		</div>
