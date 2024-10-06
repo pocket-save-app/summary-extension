@@ -264,14 +264,30 @@ export default {
 				this.error = error.message
 			})
 		},
-		removeItem() {
+		pocketItemSave() {
+			console.log('[hono]', this.page.id, 'save in pocket')
+			this.status = 'saving'
+
+			apiFetch(`pockets/${this.distinct_id}/items/${this.page.id}`, {
+				method: 'put',
+				body: {
+					status: 'saved'
+				},
+			}).then(() => {
+				this.status = 'saved'
+			}).catch(console.warn)
+		},
+		pocketItemRemove() {
 			console.log(this.page.id, 'remove from pocket')
 			this.status = 'deleting'
 
 			apiFetch(`pockets/${this.distinct_id}/items/${this.page.id}`, {
-				method: 'delete',
+				method: 'put',
+				body: {
+					status: 'deleted'
+				},
 			}).then(() => {
-				window.close()
+				this.status = 'deleted'
 			}).catch(console.warn)
 		},
 
@@ -385,21 +401,21 @@ export default {
 
 <template>
 	<div class="app-screen">
+		<div class="flex gap-3 mx-3 pt-2 pb-4 items-center">
+			<h1 class="grow text-2xl line-clamp-1">{{ page.title }}</h1>
 
-		<div class="flex gap-3 py-2 items-center border-b border-stone-100">
-			<div class="grow px-3 text-stone-500">
-				<p v-if="status === 'saving'">Saving to library..</p>
-				<p v-else-if="status === 'saved'">Saved in your library. <u class="text-stone-600 cursor-pointer" @click="removeItem">Remove</u></p>
-				<p v-else-if="status === 'deleting'">Removing..</p>
+			<div class="flex-none text-stone-500">
+				<Loader v-if="status === 'saving'" :text="'saving'"></Loader>
+				<p v-else-if="status === 'saved'"><u class="text-stone-600 cursor-pointer" @click="pocketItemRemove">Remove</u></p>
+				<Loader v-else-if="status === 'deleting'" :text="'removing'"></Loader>
+				<p v-else-if="status === 'deleted'"><u class="text-stone-600 cursor-pointer" @click="pocketItemSave">Undo</u></p>
 				<code v-else>status={{ status }}</code>
 			</div>
 
-			<a :href="`https://pocket-web.unallow.com/set-pocket/${distinct_id}`" target="_blank" class="mx-3 py-1 px-3 inline-block rounded-md bg-amber-600 hover:bg-amber-500 text-white">
-				View your library
+			<a :href="`https://myhono.com/set-pocket/${distinct_id}`" target="_blank" class="flex-none py-1 px-3 inline-block rounded-md bg-amber-600 hover:bg-amber-500 text-white transition-all">
+				View library
 			</a>
 		</div>
-
-		<h1 class="m-3 mt-4 text-2xl">{{ page.title }}</h1>
 
 		<div class="flex text-center border-b border-stone-200">
 			<button class="flex-1 py-3 border-b-2 mb-[-1px]" :class="view === 'ask' ? 'font-bold border-orange-200 text-amber-600' : 'border-transparent text-neutral-700 font-medium hover:font-semibold'" @click="setView('ask')">
