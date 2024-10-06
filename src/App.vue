@@ -210,7 +210,7 @@ export default {
 			}
 
 			if (['drive.google.com', 'docs.google.com'].includes(url.hostname)) {
-				window.open('https://myhono.com/integration-coming-soon?integration=google-drive', '_blank')
+				window.open('https://myhono.com/integrations?coming-soon=google-drive', '_blank')
 			} else if (blockedHostnames.includes(url.hostname)) {
 				window.open('https://myhono.com/try-other-website', '_blank')
 			} else {
@@ -295,9 +295,9 @@ export default {
 
 			apiFetch(`pockets/${this.distinct_id}/items/${this.page.id}`, {
 				method: 'put',
-				body: {
+				body: JSON.stringify({
 					status: 'saved'
-				},
+				}),
 			}).then(() => {
 				this.status = 'saved'
 			}).catch(console.warn)
@@ -308,9 +308,9 @@ export default {
 
 			apiFetch(`pockets/${this.distinct_id}/items/${this.page.id}`, {
 				method: 'put',
-				body: {
+				body: JSON.stringify({
 					status: 'deleted'
-				},
+				}),
 			}).then(() => {
 				this.status = 'deleted'
 			}).catch(console.warn)
