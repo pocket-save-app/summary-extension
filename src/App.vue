@@ -27,8 +27,11 @@ interface ResponseWithData extends Response {
 	data?: any
 }
 
+const apiHost = 'https://pocket-api.unallow.com'
+//const apiHost = 'http://localhost:8787'
+
 async function apiFetch(path: string, options: RequestInit = {}): Promise<ResponseWithData> {
-	const url = new URL(path, 'https://pocket-api.unallow.com')
+	const url = new URL(path, apiHost)
 
 	options.headers = new Headers({
 		'authorization': `Bearer ${import.meta.env.VITE_API_TOKEN}`,
@@ -331,29 +334,44 @@ export default {
 				content: msg || this.newMessage,
 			})
 
-			this.newMessage = ''
-
 			setTimeout(() => {
 				$messages.scrollTop = $messages.scrollHeight
 			}, 50)
 
-			apiFetch(`pockets/${this.distinct_id}/items/${this.page.id}/messages`, {
-				body: this.messages,
-			}).then(({ data: message }) => {
-				this.messages.push({
-					role: 'assistant',
-					content: message.trim(),
-				})
+			const evtSource = new EventSource(`${apiHost}/pockets/${this.distinct_id}/items/${this.page.id}/messages-stream?message=${encodeURIComponent(msg || this.newMessage)}`);
 
-				this.askStatus = 'idle'
+			evtSource.onmessage = (event) => {
+				if (this.askStatus === 'loading') {
+					this.messages.push({
+						role: 'assistant',
+						content: event.data,
+						streaming: true,
+					})
+
+					this.askStatus = 'idle'
+				} else {
+					this.messages.at(-1).content += event.data
+
+					setTimeout(() => {
+						$messages.scrollTop = $messages.scrollHeight
+					}, 50)
+				}
+			}
+
+			// close connection after meta message
+			evtSource.addEventListener("meta", (event) => {
+				console.log('[hono]', 'msg meta', event.data)
+				evtSource.close()
+
+				this.messages.at(-1).streaming = false
 
 				setTimeout(() => {
 					$messages.scrollTop = $messages.scrollHeight
 				}, 50)
-			}).catch(error => {
-				this.askStatus = 'error'
-				console.warn('messages error', error)
 			})
+
+			this.pocket.ai_messages += 1
+			this.newMessage = ''
 		},
 
 		urlHostname(url: string) {
@@ -408,7 +426,7 @@ export default {
 				<p v-if="message.role === 'user'" class="text-stone-800 text-lg mb-1">{{ message.content }}</p>
 				<div v-else class="text-slate-800 mb-3">
 					<div v-html="converter.makeHtml(message.content)" class="chat-response"></div>
-					<p v-if="message.content.length > 100" class="text-neutral-500 mt-1">
+					<p v-if="message.content.length > 100 && !message.streaming" class="text-neutral-500 mt-1">
 						<small class="text-slate-600 hover:text-slate-800">Read Aloud</small>
 						&middot;
 						<small class="text-slate-600 hover:text-slate-800 cursor-pointer" @click="$event => copyText($event, message.content)">Copy</small>
