@@ -137,7 +137,7 @@ export default {
 					contentType: document.contentType,
 					document: new XMLSerializer().serializeToString(document),
 					page: {
-						url: document.querySelector('link[rel="canonical"]')?.getAttribute('href'),
+						url: document.querySelector('link[rel="canonical"]')?.getAttribute('href') || window.location.href,
 						type: document.querySelector('meta[property="og:type"]')?.getAttribute('content'),
 						title: document.querySelector('meta[property="og:title"]')?.getAttribute('content') || document.title,
 						site_name: document.querySelector('meta[property="og:site_name"]')?.getAttribute('content'),
