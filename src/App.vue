@@ -6,6 +6,14 @@ import { Converter } from 'showdown'
 
 import Loader from './components/Loader.vue'
 
+const blockedHostnames = [
+	'gemini.google.com',
+	'mail.google.com',
+	'mail.yahoo.com',
+	'outlook.live.com',
+	'outlook.office.com',
+]
+
 class HttpError extends Error {
 	response: Response
 
@@ -185,12 +193,20 @@ export default {
 				}
 			}
 
-			chrome.scripting.executeScript({
-				target: { tabId: tab.id },
-				func: extractPageContent,
-			}, setContent);
+			if (['drive.google.com', 'docs.google.com'].includes(url.hostname)) {
+				window.open('https://myhono.com/integration-coming-soon?integration=google-drive', '_blank')
+			} else if (blockedHostnames.includes(url.hostname)) {
+				window.open('https://myhono.com/try-other-website', '_blank')
+			} else {
+				this.loadMessagesPrompts()
 
-			this.loadMessagesPrompts()
+				chrome.scripting.executeScript({
+					target: { tabId: tab.id },
+					func: extractPageContent,
+				}, setContent);
+			}
+		},
+
 		},
 
 		setView(view: string) {
