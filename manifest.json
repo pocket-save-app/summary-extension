@@ -3,7 +3,7 @@
     "name": "Summarize everything",
     "description": "Summarize the long article you're about to read",
     "version": "1.9.0",
-    "permissions": ["activeTab", "declarativeContent", "storage", "scripting"],
+    "permissions": ["activeTab", "contextMenus", "declarativeContent", "storage", "scripting"],
     "action": {
         "default_title": "Summarize now!",
         "default_popup": "index.html"
