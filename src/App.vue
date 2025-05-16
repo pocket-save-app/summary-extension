@@ -74,7 +74,10 @@ export default {
 			id: chrome.runtime.id,
 			distinct_id: null,
 			pocket: null,
-			converter: new Converter(),
+			converter: new Converter({
+				openLinksInNewWindow: true,
+				simplifiedAutoLink: true,
+			}),
 
 			view: 'ask',
 
@@ -562,17 +565,28 @@ export default {
 
 }
 
-.chat-response > *:last-child {
-	margin-bottom: 0;
+.chat-response a {
+	text-decoration: underline;
 }
 
 .chat-response ul {
 	list-style: disc;
+	margin-left: 0.5rem;
 }
 
+.chat-response ol {
+	list-style: decimal;
+	margin-left: 0.5rem;
+}
+
+.chat-response ol li,
 .chat-response ul li {
 	margin-left: 1em;
 	margin-bottom: 0.2rem;
 	line-height: 1.5em;
+}
+
+.chat-response > *:last-child {
+	margin-bottom: 0;
 }
 </style>
